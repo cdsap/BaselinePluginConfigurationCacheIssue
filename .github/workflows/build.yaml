@@ -1,0 +1,65 @@
+jobs:
+  test_and_apk:
+    name: "Local tests and APKs"
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pull-requests: write
+      security-events: write
+
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout (first copy)
+        uses: actions/checkout@v4
+        with:
+          path: first
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: 21
+
+      - name: First build
+        working-directory: first
+        run: ./gradlew assembleDebug
+        env:
+          DEVELOCITY_ACCESS_KEY: ${{ secrets.DV_ACCESS_KEY }}
+
+      # Archive only the configuration-cache (excluding the two files)
+      - name: Pack configuration cache (exclude lock & gc.properties)
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/ccache
+          # Recreate directory structure under /tmp/ccache/.gradle/
+          mkdir -p /tmp/ccache/.gradle
+          # Create a tarball with exclusions
+          tar -C first/.gradle \
+              --exclude='configuration-cache/configuration-cache.lock' \
+              --exclude='configuration-cache/gc.properties' \
+              -czf /tmp/ccache/config-cache.tgz \
+              configuration-cache
+          ls -lah /tmp/ccache
+
+      # Second checkout into a separate directory
+      - name: Checkout (second copy)
+        uses: actions/checkout@v4
+        with:
+          path: second
+
+      # Restore the archived configuration cache into the second copy
+      - name: Restore configuration cache to second copy
+        run: |
+          set -euo pipefail
+          mkdir -p second/.gradle
+          tar -C second/.gradle -xzf /tmp/ccache/config-cache.tgz
+          # Show what was restored
+          find second/.gradle/configuration-cache -maxdepth 1 -type f -ls || true
+
+      - name: Second build (with restored configuration cache)
+        working-directory: second
+        run: ./gradlew assembleDebug
+        env:
+          DEVELOCITY_ACCESS_KEY: ${{ secrets.DV_ACCESS_KEY }}
