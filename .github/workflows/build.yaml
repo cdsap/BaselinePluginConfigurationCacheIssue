@@ -23,7 +23,7 @@ jobs:
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
+          distribution: zulu
           java-version: 21
 
       - name: First build
@@ -40,7 +40,8 @@ jobs:
             --exclude='configuration-cache/gc.properties' \
             -czf /tmp/ccache/config-cache.tgz \
             configuration-cache
-          ls -lah /tmp/ccache
+          echo "Tar contents:"
+          tar -tzf /tmp/ccache/config-cache.tgz | head -50
 
       - name: Upload configuration cache artifact
         uses: actions/upload-artifact@v4
@@ -66,7 +67,7 @@ jobs:
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
+          distribution: zulu
           java-version: 21
 
       - name: Download configuration cache artifact
@@ -75,13 +76,20 @@ jobs:
           name: config-cache-tgz
           path: /tmp/ccache
 
-      - name: Restore configuration cache
+      - name: Inspect and restore configuration cache
         run: |
           set -euo pipefail
+          echo "Tar contents (before extract):"
+          tar -tzf /tmp/ccache/config-cache.tgz | head -50
+
           mkdir -p .gradle
           tar -C .gradle -xzf /tmp/ccache/config-cache.tgz
-          # Show what was restored (optional)
-          find .gradle/configuration-cache -maxdepth 1 -type f -ls || true
+
+          echo "Restored directory size:"
+          du -sh .gradle/configuration-cache || true
+
+          echo "Restored files (depth <= 3):"
+          find .gradle/configuration-cache -maxdepth 3 -type f | head -100
 
       - name: Second build (with restored configuration cache)
         run: ./gradlew assembleDebug
